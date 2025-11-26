@@ -1,0 +1,78 @@
+Backend Folder Structure
+
+backend/
+│── app.py
+│── config.py
+│── requirements.txt
+│── data/
+│     ├── load_data.py
+│     ├── variant_gene_map.pkl
+│     ├── gene_variant_index.pkl
+│     ├── carrot_300.zarr/
+│
+│── api/
+│     ├── similarity.py
+│     ├── association.py
+│     ├── knowledge.py
+│
+│── analysis/
+│     ├── subset.py
+│     ├── encoding.py
+│     ├── metrics.py
+│     ├── association_stats.py
+│
+└── utils/
+      ├── pubmed.py
+      ├── ensembl.py
+      ├── plantsdb.py
+      
+
+Frontend implementation (React)
+src/
+│── App.js
+│── api.js
+│── pages/
+│     ├── SimilarityPage.js
+│     ├── AssociationPage.js
+│     ├── KnowledgePage.js
+│
+└── components/
+       ├── GeneBlock.js
+       ├── ResultsTable.js
+       ├── HeatmapPlot.js
+
+
+
+You now have:
+
+✔ PubMed keyword mining
+✔ Ensembl Plants annotation queries
+✔ PlantsDB / Gramene gene retrieval
+✔ Unified phenotype → gene evidence merging
+
+This enables:
+
+Users entering “root colour” → candidate genes returned
+
+Cross-database evidence scoring
+
+Displaying gene lists directly for similarity analysis
+
+🎉 Summary — You Now Have:
+✔ A complete FastAPI backend
+✔ A working React frontend UI
+✔ A phenotype→gene knowledge module
+✔ Multi-metric similarity engine
+✔ Union/intersection of gene sets
+✔ Optional GWAS-style internal analytics
+✔ Production-ready folder structure & code      
+
+
+
+### RUN BACKEND
+conda activate crunch
+uvicorn backend.app:app --reload
+
+### RUN FRONTEND
+conda activate crunch
+npm run dev

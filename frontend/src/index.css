@@ -1,0 +1,4 @@
+/* frontend/src/index.css */
+body { font-family: Inter, Arial, sans-serif; margin: 0; padding: 0; background: #fafafa; color: #111; }
+nav a { margin-right: 8px; text-decoration: none; color: #1a73e8; }
+

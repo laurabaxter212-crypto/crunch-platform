@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+numpy
+scipy
+pandas
+requests
+zarr
+scikit-allel
+lxml
+beautifulsoup4
+scikit-learn
