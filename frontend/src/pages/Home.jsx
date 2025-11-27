@@ -14,7 +14,8 @@ export default function Home() {
       <h1>Vegetable SNP Explorer</h1>
       <p>Welcome to CRUNCH, the SNP analysis platform.</p>
       <p><strong>Backend status:</strong> {status}</p>
-      <p>Use <em>Find genes</em> to locate candidate genes from literature/databases. Use <em>Run analysis</em> to compute accession similarity and PCA/MDS plots.</p>
+      <p>Use <em>Find genes</em> to locate candidate genes from literature/databases.<br /> 
+      Use <em>Run analysis</em> to compute accession similarity and PCA/MDS plots.</p>
     </div>
   );
 }
