@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="900" viewBox="0 0 1200 900" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .title { font: 700 20px/1.1 "Helvetica Neue", Arial, sans-serif; fill:#10304a; }
+    .box-title { font: 700 14px/1.1 "Helvetica Neue", Arial, sans-serif; fill:#083047; }
+    .text { font: 13px/1.2 "Helvetica Neue", Arial, sans-serif; fill:#0b2b3a; }
+    .small { font: 11px/1.2 "Helvetica Neue", Arial, sans-serif; fill:#0b2b3a; }
+    .card { fill: #fff; stroke: #d7e6ee; stroke-width: 1.5; rx:10; filter: url(#shadow); }
+    .thin { stroke-width: 1; stroke: #d7e6ee; fill: #fbfdff; }
+    .connector { stroke: #9fc0cf; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    .accent { fill: #eaf6f9; stroke:#bfe0ea; stroke-width:1.2; rx:8;}
+  </style>
+
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#a6c6d1" flood-opacity="0.25"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#9fc0cf"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="28" y="36" class="title">CRUNCH — System Architecture (Full Platform)</text>
+
+  <!-- FRONTEND -->
+  <g transform="translate(28,64)">
+    <rect x="0" y="0" width="364" height="200" class="card"/>
+    <text x="16" y="26" class="box-title">Frontend — React (Browser)</text>
+    <text x="16" y="52" class="text">• Pages: Home, Find Genes, Run analysis, Variant Browser</text>
+    <text x="16" y="72" class="text">• Components: PCA 2D/3D, Heatmap, Gene table, Region input</text>
+    <text x="16" y="92" class="text">• Interactive visualisations (Plotly / Plotly-React)</text>
+    <text x="16" y="112" class="text">• Export: PNG, CSV</text>
+    <text x="16" y="132" class="text">• Integrations: DivBrowse (embed), external links</text>
+    <rect x="16" y="150" width="180" height="36" class="accent"/>
+    <text x="24" y="174" class="small">Controls, copy-to-clipboard, column toggles</text>
+  </g>
+
+  <!-- BACKEND -->
+  <g transform="translate(420,64)">
+    <rect x="0" y="0" width="520" height="320" class="card"/>
+    <text x="16" y="26" class="box-title">Backend — FastAPI (Python)</text>
+
+    <rect x="20" y="46" width="200" height="40" class="thin" rx="6"/>
+    <text x="30" y="74" class="small">/api/{species}/similarity</text>
+    <rect x="240" y="46" width="260" height="40" class="thin" rx="6"/>
+    <text x="250" y="74" class="small">/api/{species}/pca_mds</text>
+
+    <rect x="20" y="96" width="200" height="40" class="thin" rx="6"/>
+    <text x="30" y="124" class="small">/api/{species}/heatmap</text>
+    <rect x="240" y="96" width="260" height="40" class="thin" rx="6"/>
+    <text x="250" y="124" class="small">/api/{species}/find_genes</text>
+
+    <rect x="20" y="146" width="200" height="40" class="thin" rx="6"/>
+    <text x="30" y="174" class="small">/api/{species}/association</text>
+    <rect x="240" y="146" width="260" height="40" class="thin" rx="6"/>
+    <text x="250" y="174" class="small">/api/data/{species}/samples</text>
+
+    <text x="16" y="210" class="text">Core modules:</text>
+    <text x="36" y="232" class="small">• Subsetting (genes / coordinates)</text>
+    <text x="36" y="248" class="small">• Encoding / metrics (numeric, IBS, match)</text>
+    <text x="36" y="264" class="small">• PCA/MDS + clustering</text>
+    <text x="36" y="280" class="small">• Knowledge connectors (PubMed, Ensembl, PlantsDB)</text>
+  </g>
+
+  <!-- DATA LAYER -->
+  <g transform="translate(28,280)">
+    <rect x="0" y="0" width="912" height="160" class="card"/>
+    <text x="16" y="22" class="box-title">Data Layer</text>
+    <text x="16" y="46" class="text">• DATASETS registry: carrot, onion, … (SpeciesData wrapper)</text>
+    <text x="16" y="66" class="text">• Storage formats: Zarr (GT, samples), GTF/GFF, pickles (indices)</text>
+    <text x="16" y="86" class="text">• Indices: variant↔gene, gene↔variants</text>
+
+    <rect x="16" y="104" width="260" height="36" class="accent"/>
+    <text x="24" y="126" class="small">Add new species by adding entry in DATASETS</text>
+  </g>
+
+  <!-- EXTERNAL -->
+  <g transform="translate(28,468)">
+    <rect x="0" y="0" width="360" height="120" class="card"/>
+    <text x="16" y="22" class="box-title">Optional integrations</text>
+    <text x="16" y="46" class="small">• DivBrowse (embedded variant browser)</text>
+    <text x="16" y="66" class="small">• KnetMiner / Ensembl Plants / EBI resources</text>
+    <text x="16" y="86" class="small">• Cloud storage for large files (S3 / MinIO)</text>
+  </g>
+
+  <!-- arrows -->
+  <path d="M392 140 L420 140" class="connector"/>
+  <path d="M392 260 L420 260" class="connector"/>
+  <path d="M420 388 L420 300" class="connector"/>
+  <path d="M392 520 L420 520" class="connector"/>
+
+  <!-- footer note -->
+  <text x="28" y="820" class="small">Generated for CRUNCH prototype — multi-species-ready design. Save this SVG and include in project docs or wiki.</text>
+</svg>

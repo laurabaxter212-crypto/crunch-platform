@@ -1,0 +1,89 @@
+                                   ┌─────────────────────────────────┐
+                                   │            FRONT END             │
+                                   │        (React + Plotly)          │
+                                   ├─────────────────────────────────┤
+                                   │  Navigation / Pages:            │
+                                   │   • Home                        │
+                                   │   • Find Genes                  │
+                                   │   • Run Analysis                │
+                                   │   • Variant Browser (DivBrowse) │
+                                   │   • Heatmap Clustering          │
+                                   │   • PCA / MDS Viewer            │
+                                   │   • GWAS / Manhattan viewer     │
+                                   │   • Species Selection           │
+                                   ├─────────────────────────────────┤
+                                   │  Components:                    │
+                                   │   • PCA 2D/3D Scatter           │
+                                   │   • Heatmap (Plotly)            │
+                                   │   • Region Input (chr:start-end)│
+                                   │   • Variant Table               │
+                                   │   • Phenotype Upload Form       │
+                                   │   • Gene Evidence Table         │
+                                   │   • External Tool Links         │
+                                   └─────────────────────┬───────────┘
+                                                         │
+                                                         ▼
+                         ┌──────────────────────────────────────────────────────────┐
+                         │                     BACKEND API                           │
+                         │                (FastAPI + Python)                         │
+                         ├──────────────────────────────────────────────────────────┤
+                         │  API Namespaces / Routers:                                │
+                         │   /api/{species}/similarity                               │
+                         │   /api/{species}/pca_mds                                   │
+                         │   /api/{species}/heatmap                                   │
+                         │   /api/{species}/association (GWAS)                        │
+                         │   /api/{species}/variants    (NEW)                         │
+                         │       - by region (chr:start-end)                          │
+                         │       - by gene LOC ID                                     │
+                         │   /api/{species}/genes       (NEW)                         │
+                         │       - get gene annotation, location                      │
+                         │   /api/knowledge/{species}/find_genes                      │
+                         │   /api/data/{species}/samples                              │
+                         │   /api/data/{species}/dataset_info                         │
+                         ├──────────────────────────────────────────────────────────┤
+                         │  Backend Functional Modules:                              │
+                         │                                                           │
+                         │   • Subsetting:                                           │
+                         │        - By gene list                                     │
+                         │        - By genomic coordinate range                      │
+                         │   • Dimensionality reduction: PCA/MDS                     │
+                         │   • Distance metrics: IBS, Euclidean, Exact-match         │
+                         │   • Clustering: Ward, Average, Agglomerative              │
+                         │   • GWAS: Logistic/Linear/SNP-level p-values              │
+                         │   • Variant effect prediction (SnpEff/VEP) (future)       │
+                         │   • Knowledge search: PubMed, PlantsDB, Ensembl           │
+                         │   • Gene mapping: LOC → gene → region                     │
+                         └─────────────┬─────────────────────────────────────────────┘
+                                       │
+                                       ▼
+        ┌────────────────────────────────────────────────────────────────────────────┐
+        │                              DATA LAYER                                    │
+        ├────────────────────────────────────────────────────────────────────────────┤
+        │ Multi-Species Dataset Registry (`DATASETS`)                                │
+        │                                                                            │
+        │  carrot → SpeciesData object                                               │
+        │    - Zarr genotype store: GT, samples, variants                            │
+        │    - variant→gene map (pkl/json)                                           │
+        │    - gene→variant index                                                    │
+        │                                                                            │
+        │  onion  → SpeciesData object (future)                                      │
+        │  
+        │                                                                            │
+        │  External resources (local or cloud):                                      │
+        │    - Reference genome FASTA                                                │
+        │    - GFF/GTF annotation                                                    │
+        │    - Precomputed SNP effect annotations                                    │
+        └─────────────┬─────────────────────────────────────────────────────────────┘
+                      │
+                      ▼
+       ┌─────────────────────────────────────────────────────────────────────────────┐
+       │                     OPTIONAL / EXTERNAL INTEGRATIONS                        │
+       ├─────────────────────────────────────────────────────────────────────────────┤
+       │ • DivBrowse – embedded in front-end for variant browsing                    │
+       │ • KnetMiner – gene-centric knowledge graph                                  │
+       │ • Ensembl Plants – gene models, orthology                                   │
+       │ • SNP-Hub / European Variation Archive – public variant portals             │
+       │ • GRIN Global / Germinate – accession metadata                              │
+       │ • AlphaFold – protein structure mapping for coding SNPs                     │
+       └─────────────────────────────────────────────────────────────────────────────┘
+

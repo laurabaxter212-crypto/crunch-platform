@@ -1,0 +1,72 @@
+CRUNCH PROJECT — CONTEXT SUMMARY FOR VSCode
+
+CRUNCH is an interactive web platform for exploring genomic variation across multiple species, starting with carrot, soon including onion.
+It is built from:
+
+Frontend
+
+React + Vite
+
+Pages:
+
+Home
+
+Find Genes (literature search across PubMed, Ensembl Plants, PlantsDB)
+
+Similarity / Heatmap (planned)
+
+Run Analysis (PCA, MDS, clustering, per-gene stats)
+
+API calls through frontend/src/api/index.js
+
+Plots: Plotly.js
+
+Backend
+
+FastAPI (Python)
+
+Routers (all under /api/):
+
+/api/{species}/similarity
+
+/api/{species}/pca_mds
+
+/api/{species}/heatmap
+
+/api/{species} (association)
+
+/api/{species}/find_genes
+
+/api/data/{species}/samples
+
+/api/ping
+
+SpeciesData class loads genotype datasets from Zarr
+
+Data
+
+Each species has:
+
+<species>_300.zarr
+
+variant_gene_map.pkl
+
+gene_variant_index.pkl
+
+Current priorities
+
+Add full-similarity heatmap page (global pairwise sample similarity).
+
+Support genomic coordinates (chr:start-end) input anywhere gene names are used.
+
+Improve Find Genes search quality and add multi-species awareness.
+
+Prepare for integrating external tools (DivBrowse, SNPHub, KnetMiner).
+
+UX Notes
+
+Sample names must be cleaned (strip .BAM, .vcf.gz, .sorted.bam).
+
+Species dropdown selects dataset.
+
+Association analysis requires phenotype mapping (sample → 0/1).
