@@ -101,7 +101,7 @@ export default function Analysis() {
     setRunning(true);
     setResults(null);
     try {
-      const payload = { phenotype_blocks: phenotypeBlocks, reference_accession: reference, similarity_measure: metric, combine };
+      const payload = { phenotype_blocks: phenotypeBlocks, reference_accession: reference, distance_measure: metric, combine };
       const res = await runSimilarity(payload, species);
       if (res && res.error) {
         setError(res.error);

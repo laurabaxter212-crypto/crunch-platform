@@ -3,7 +3,12 @@ from fastapi import APIRouter, HTTPException
 from backend.data.load_data import DATASETS
 from backend.analysis.subset import subset_variants_by_genes
 from backend.analysis.encoding import encode_genotypes
-from backend.analysis.metrics import numeric_distance, exact_match_similarity, euclidean_distance, ibs_similarity
+from backend.analysis.metrics import (
+    numeric_distance,
+    exact_match_similarity,
+    euclidean_distance,
+    ibs_similarity,
+)
 
 router = APIRouter()
 
@@ -15,6 +20,13 @@ def compute_similarity(species: str, req: dict):
     if not ds.loaded:
         raise HTTPException(status_code=503, detail=f"Dataset for '{species}' not loaded")
 
+    if ds.gene_to_variants is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Gene-to-variant index missing for species '{species}'."
+        )
+
+    # ---- Parse request ----
     gene_blocks = [b.get("genes", []) for b in req.get("phenotype_blocks", [])]
     combine = req.get("combine", "union")
     metric = req.get("similarity_measure", "numeric")
@@ -22,19 +34,25 @@ def compute_similarity(species: str, req: dict):
     if not ref_name:
         raise HTTPException(status_code=400, detail="reference_accession is required")
 
+    # ---- Resolve reference index ----
     try:
         ref_idx = ds.samples.index(ref_name)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Reference accession '{ref_name}' not found in samples for {species}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Reference accession '{ref_name}' not found in samples for {species}"
+        )
 
+    # ---- Subset variants ----
     variant_idx = subset_variants_by_genes(gene_blocks, combine, ds.gene_to_variants)
-
     if len(variant_idx) == 0:
         return {"error": "No variants found."}
 
+    # ---- Slice and encode genotypes ----
     gt = ds.gt.get_orthogonal_selection((variant_idx, slice(None), slice(None)))
     geno = encode_genotypes(gt)
 
+    # ---- Compute similarity ----
     if metric == "numeric":
         scores = numeric_distance(geno, ref_idx)
     elif metric == "match":
@@ -44,21 +62,23 @@ def compute_similarity(species: str, req: dict):
     else:
         scores = ibs_similarity(geno, ref_idx)
 
+    # ---- Build results ----
     results = []
     for i, sample in enumerate(ds.samples):
         if i == ref_idx:
             continue
-        results.append({"accession": sample, "score": float(scores[i])})
+        clean_name = sample.split(".")[0]   # short, clean sample ID
+        results.append({"accession": clean_name, "score": float(scores[i])})
 
-    # rank
+    # ---- Rank ----
     if metric in ["numeric", "euclidean"]:
         results.sort(key=lambda x: x["score"])
     else:
         results.sort(key=lambda x: -x["score"])
 
     return {
-        "reference": ref_name,
+        "reference": ref_name.split(".")[0],
         "n_variants": len(variant_idx),
         "metric": metric,
-        "results": results
+        "results": results,
     }

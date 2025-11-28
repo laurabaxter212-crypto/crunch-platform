@@ -4,7 +4,7 @@ from backend.data.load_data import DATASETS
 
 router = APIRouter()
 
-@router.get("/data/{species}/samples")
+@router.get("/{species}/samples")
 def list_samples(species: str):
     ds = DATASETS.get(species)
     if ds is None:
