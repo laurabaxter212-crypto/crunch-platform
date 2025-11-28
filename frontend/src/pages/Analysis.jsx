@@ -279,10 +279,11 @@ export default function Analysis() {
         <div>
           <label style={{ display: "block", fontWeight: 600 }}>Metric</label>
           <select value={metric} onChange={(e) => setMetric(e.target.value)}>
-            <option value="numeric">numeric</option>
-            <option value="euclidean">euclidean</option>
-            <option value="match">match</option>
-            <option value="ibs">ibs</option>
+            <option value="numeric">numeric — absolute allele difference</option>
+            <option value="euclidean">euclidean — geometric genotype distance</option>
+            <option value="match">match — proportion of identical genotypes</option>
+            <option value="ibs">ibs — identity-by-state similarity</option>
+
           </select>
         </div>
 
@@ -389,21 +390,39 @@ export default function Analysis() {
             <div>
               <label style={{ display: "block", fontWeight: 600 }}>X axis</label>
               <select value={pcX} onChange={(e) => setPcX(Number(e.target.value))}>
-                {pcOptions.map((p) => (
-                  <option key={p} value={p}>
-                    PC{p}
-                  </option>
-                ))}
+                {pcOptions.map((p) => {
+                  const expl = pcaData?.pca?.explained?.[p - 1];
+                  const label =
+                    expl !== undefined
+                      ? `PC${p} (${(expl * 100).toFixed(1)}%)`
+                      : `PC${p}`;
+
+                  return (
+                    <option key={p} value={p}>
+                      {label}
+                    </option>
+                  );
+                })}
+
               </select>
             </div>
             <div>
               <label style={{ display: "block", fontWeight: 600 }}>Y axis</label>
               <select value={pcY} onChange={(e) => setPcY(Number(e.target.value))}>
-                {pcOptions.map((p) => (
-                  <option key={p} value={p}>
-                    PC{p}
-                  </option>
-                ))}
+                {pcOptions.map((p) => {
+                  const expl = pcaData?.pca?.explained?.[p - 1];
+                  const label =
+                    expl !== undefined
+                      ? `PC${p} (${(expl * 100).toFixed(1)}%)`
+                      : `PC${p}`;
+
+                  return (
+                    <option key={p} value={p}>
+                      {label}
+                    </option>
+                  );
+                })}
+
               </select>
             </div>
 
@@ -418,11 +437,20 @@ export default function Analysis() {
               <div>
                 <label style={{ display: "block", fontWeight: 600 }}>Z axis</label>
                 <select value={pcZ} onChange={(e) => setPcZ(Number(e.target.value))}>
-                  {pcOptions.map((p) => (
+                {pcOptions.map((p) => {
+                  const expl = pcaData?.pca?.explained?.[p - 1];
+                  const label =
+                    expl !== undefined
+                      ? `PC${p} (${(expl * 100).toFixed(1)}%)`
+                      : `PC${p}`;
+
+                  return (
                     <option key={p} value={p}>
-                      PC{p}
+                      {label}
                     </option>
-                  ))}
+                  );
+                })}
+
                 </select>
               </div>
             )}
