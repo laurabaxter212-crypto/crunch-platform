@@ -1,0 +1,73 @@
+/* --- Table layout --- */
+
+table.gene-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+table.gene-table thead th {
+  background: #f0f4f8;
+  padding: 8px 10px;
+  border-bottom: 2px solid #d6dbe0;
+  text-align: left;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+table.gene-table tbody td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #eeeeee;
+}
+
+/* --- Row highlighting --- */
+
+table.gene-table tbody tr:hover {
+  background: #f5faff;         /* light hover */
+}
+
+table.gene-table tbody tr.selected {
+  background: #e3f2ff !important; /* stronger highlight for selected rows */
+}
+
+/* --- Checkbox alignment --- */
+
+table.gene-table td:first-child,
+table.gene-table th:first-child {
+  width: 60px;
+  text-align: center;
+}
+
+/* --- Buttons --- */
+
+.gene-actions button {
+  margin-right: 8px;
+  padding: 6px 10px;
+  border: 1px solid #c0c7d0;
+  background: #fafbfd;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+
+.gene-actions button:hover {
+  background: #eef3f8;
+}
+
+/* Export button styling (optional) */
+.export-buttons button {
+  margin-top: 4px;
+}
+
+/* --- Panel spacing --- */
+
+.gene-panel {
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+
+/* Column toggle checkboxes */
+.column-toggle label {
+  margin-right: 12px;
