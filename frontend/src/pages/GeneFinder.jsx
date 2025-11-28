@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { searchKnowledge } from "../api";
 import "./GeneFinder.css";
 
@@ -29,8 +29,12 @@ export default function GeneFinder() {
 
   const [mergedResults, setMergedResults] = useState([]);
   const [loading, setLoading] = useState(false);
-
   const [selected, setSelected] = useState({});
+
+  // Sorting state
+  const [sortColumn, setSortColumn] = useState("loc_id");
+  const [sortDirection, setSortDirection] = useState("asc"); // "asc" | "desc"
+
   const [showColumns, setShowColumns] = useState({
     symbol: true,
     loc_id: true,
@@ -39,45 +43,45 @@ export default function GeneFinder() {
     evidence: true
   });
 
-  // ---------------------------------------------------------
-  // MAIN SEARCH + MERGING LOGIC
-  // ---------------------------------------------------------
+  // -------------------------------------------
+  // FETCH + MERGE
+  // -------------------------------------------
 
   async function doSearch() {
     if (!phenotype.trim()) return;
 
     setLoading(true);
-    setSelected({});
     setMergedResults([]);
+    setSelected({});
 
     try {
       const data = await searchKnowledge(species, phenotype);
       const rows = data.results || [];
 
-      // Collapse rows by gene (loc_id)
       const geneMap = {};
 
       for (const r of rows) {
-        const gene = r.loc_id || r.symbol; // fallback
+        const geneId = r.loc_id || r.symbol;
+        if (!geneId) continue;
 
-        if (!geneMap[gene]) {
-          geneMap[gene] = {
+        if (!geneMap[geneId]) {
+          geneMap[geneId] = {
             symbol: r.symbol || "",
             loc_id: r.loc_id || "",
             source: r.source || "",
-            pmids: []   // list of { pmid, title }
+            pmids: []
           };
         }
 
-        // Extract PMIDs
+        // Normalize PMIDs into an array
         if (r.pmid) {
           const pmids = Array.isArray(r.pmid)
             ? r.pmid
             : String(r.pmid).split(/[,\s]+/).filter(Boolean);
 
           pmids.forEach(pmid => {
-            if (!geneMap[gene].pmids.find(e => e.pmid === pmid)) {
-              geneMap[gene].pmids.push({ pmid, title: "Loading…" });
+            if (!geneMap[geneId].pmids.find(e => e.pmid === pmid)) {
+              geneMap[geneId].pmids.push({ pmid, title: "Loading…" });
             }
           });
         }
@@ -86,25 +90,74 @@ export default function GeneFinder() {
       const merged = Object.values(geneMap);
       setMergedResults(merged);
 
-      // Fetch article titles
-      merged.forEach(gene => {
-        gene.pmids.forEach(async (entry) => {
-          const title = await fetchPubmedTitle(entry.pmid);
-          entry.title = title;
-
-          // Force refresh
+      // Fetch evidence titles
+      merged.forEach(gene =>
+        gene.pmids.forEach(async entry => {
+          entry.title = await fetchPubmedTitle(entry.pmid);
           setMergedResults(prev => [...prev]);
-        });
-      });
-
+        })
+      );
     } finally {
       setLoading(false);
     }
   }
 
-  // ---------------------------------------------------------
-  // SELECTION CONTROLS
-  // ---------------------------------------------------------
+  // -------------------------------------------
+  // SORTING
+  // -------------------------------------------
+
+  function handleSort(col) {
+    if (sortColumn === col) {
+      setSortDirection(prev => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortColumn(col);
+      setSortDirection("asc");
+    }
+  }
+
+  const sortedResults = useMemo(() => {
+    const list = [...mergedResults];
+
+    list.sort((a, b) => {
+      let A, B;
+
+      switch (sortColumn) {
+        case "symbol":
+          A = a.symbol || "";
+          B = b.symbol || "";
+          break;
+        case "loc_id":
+          A = a.loc_id || "";
+          B = b.loc_id || "";
+          break;
+        case "source":
+          A = a.source || "";
+          B = b.source || "";
+          break;
+        case "pmid":
+          A = a.pmids.length;
+          B = b.pmids.length;
+          break;
+        case "evidence":
+          A = a.pmids.map(x => x.title).join(" ");
+          B = b.pmids.map(x => x.title).join(" ");
+          break;
+        default:
+          A = "";
+          B = "";
+      }
+
+      if (A < B) return sortDirection === "asc" ? -1 : 1;
+      if (A > B) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return list;
+  }, [mergedResults, sortColumn, sortDirection]);
+
+  // -------------------------------------------
+  // SELECTION
+  // -------------------------------------------
 
   function toggleSelected(id) {
     setSelected(prev => ({ ...prev, [id]: !prev[id] }));
@@ -112,7 +165,10 @@ export default function GeneFinder() {
 
   function selectAll() {
     const all = {};
-    mergedResults.forEach(r => { if (r.loc_id) all[r.loc_id] = true; });
+    mergedResults.forEach(r => {
+      const id = r.loc_id || r.symbol;
+      if (id) all[id] = true;
+    });
     setSelected(all);
   }
 
@@ -120,55 +176,43 @@ export default function GeneFinder() {
     setSelected({});
   }
 
-  // ---------------------------------------------------------
-  // CLIPBOARD & EXPORT
-  // ---------------------------------------------------------
+  // -------------------------------------------
+  // COPY / EXPORT
+  // -------------------------------------------
 
   function copySelected() {
-    const ids = mergedResults
-      .filter(r => selected[r.loc_id])
-      .map(r => r.loc_id);
+    const ids = sortedResults
+      .filter(r => selected[r.loc_id || r.symbol])
+      .map(r => r.loc_id || r.symbol);
 
-    if (ids.length === 0) {
-      alert("No selected rows.");
-      return;
-    }
-
+    if (ids.length === 0) return alert("No selected rows.");
     navigator.clipboard.writeText(ids.join("\n"));
     alert(`Copied ${ids.length} gene IDs.`);
   }
 
   function copyAll() {
-    const ids = mergedResults.map(r => r.loc_id).filter(Boolean);
+    const ids = sortedResults.map(r => r.loc_id || r.symbol);
     navigator.clipboard.writeText(ids.join("\n"));
     alert(`Copied ${ids.length} gene IDs.`);
   }
 
   function exportCsv(onlySelected = false) {
     const rows = onlySelected
-      ? mergedResults.filter(r => selected[r.loc_id])
-      : mergedResults;
+      ? sortedResults.filter(r => selected[r.loc_id || r.symbol])
+      : sortedResults;
 
-    if (rows.length === 0) {
-      alert("No data to export.");
-      return;
-    }
+    if (rows.length === 0) return alert("No data to export.");
 
     const header = ["GeneID", "Symbol", "Source", "PMIDs", "EvidenceTitles"];
 
     const csv = [
       header.join(","),
       ...rows.map(r => {
+        const geneId = r.loc_id || r.symbol;
         const pmidList = r.pmids.map(x => x.pmid).join(";");
         const titles = r.pmids.map(x => x.title).join(";;");
-        return [
-          r.loc_id,
-          r.symbol,
-          r.source,
-          pmidList,
-          titles
-        ]
-          .map(x => `"${String(x).replace(/"/g, '""')}"`)
+        return [geneId, r.symbol, r.source, pmidList, titles]
+          .map(v => `"${v.replace(/"/g, '""')}"`)
           .join(",");
       })
     ].join("\n");
@@ -182,11 +226,10 @@ export default function GeneFinder() {
 
   function exportTxt(onlySelected = false) {
     const rows = onlySelected
-      ? mergedResults.filter(r => selected[r.loc_id])
-      : mergedResults;
+      ? sortedResults.filter(r => selected[r.loc_id || r.symbol])
+      : sortedResults;
 
-    const text = rows.map(r => r.loc_id).join("\n");
-
+    const text = rows.map(r => r.loc_id || r.symbol).join("\n");
     const blob = new Blob([text], { type: "text/plain" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -194,19 +237,31 @@ export default function GeneFinder() {
     a.click();
   }
 
-  // ---------------------------------------------------------
-  // RENDERING
-  // ---------------------------------------------------------
+  // -------------------------------------------
+  // RENDER
+  // -------------------------------------------
 
-  const th = { padding: "6px 8px", borderBottom: "1px solid #ddd" };
+  const th = col => ({
+    padding: "6px 8px",
+    borderBottom: "1px solid #ccc",
+    cursor: "pointer",
+    background:
+      sortColumn === col ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.4)"
+  });
+
   const td = { padding: "6px 8px", borderBottom: "1px solid #eee" };
 
+  function sortIndicator(col) {
+    if (sortColumn !== col) return "";
+    return sortDirection === "asc" ? " ▲" : " ▼";
+  }
+
   return (
-    <div style={{ padding: 20 }}>
+    <div className="gf-container">
       <h2>Find Genes</h2>
 
-      {/* Search controls */}
-      <div style={{ marginBottom: 12 }}>
+      {/* Controls */}
+      <div className="gf-controls">
         <label>
           Species:&nbsp;
           <select value={species} onChange={e => setSpecies(e.target.value)}>
@@ -215,25 +270,22 @@ export default function GeneFinder() {
           </select>
         </label>
 
-        <label style={{ marginLeft: 16 }}>
+        <label>
           Phenotype:&nbsp;
           <input
             value={phenotype}
             onChange={e => setPhenotype(e.target.value)}
             placeholder="e.g. bolting, purple root…"
-            style={{ width: 250 }}
           />
         </label>
 
-        <button onClick={doSearch} style={{ marginLeft: 12 }}>
-          Search
-        </button>
+        <button onClick={doSearch}>Search</button>
       </div>
 
       {/* Column toggles */}
-      <div style={{ marginBottom: 10 }}>
+      <div className="gf-col-toggles">
         {Object.keys(showColumns).map(col => (
-          <label key={col} style={{ marginRight: 12 }}>
+          <label key={col}>
             <input
               type="checkbox"
               checked={showColumns[col]}
@@ -249,14 +301,14 @@ export default function GeneFinder() {
       {loading && <p>Searching…</p>}
 
       {/* Actions */}
-      {mergedResults.length > 0 && (
-        <div className="gene-actions">
+      {sortedResults.length > 0 && (
+        <div className="gf-actions">
           <button onClick={copySelected}>Copy selected</button>
           <button onClick={copyAll}>Copy all</button>
           <button onClick={selectAll}>Select all</button>
           <button onClick={clearSelected}>Clear selection</button>
 
-          <div className="export-buttons">
+          <div className="gf-export">
             <button onClick={() => exportCsv(false)}>Export ALL CSV</button>
             <button onClick={() => exportCsv(true)}>Export SELECTED CSV</button>
             <button onClick={() => exportTxt(false)}>Export ALL TXT</button>
@@ -265,51 +317,75 @@ export default function GeneFinder() {
         </div>
       )}
 
-      {/* RESULTS TABLE */}
-      {mergedResults.length > 0 && (
-        <table className="gene-table">
-          <thead>
-            <tr>
-              <th style={th}>Select</th>
-              {showColumns.symbol && <th style={th}>Symbol</th>}
-              {showColumns.loc_id && <th style={th}>Gene ID</th>}
-              {showColumns.source && <th style={th}>Source</th>}
-              {showColumns.pmid && <th style={th}>PMIDs</th>}
-              {showColumns.evidence && <th style={th}>Evidence</th>}
-            </tr>
-          </thead>
-
-          <tbody>
-            {mergedResults.map(r => (
-              <tr
-                key={r.loc_id}
-                className={selected[r.loc_id] ? "selected" : ""}
-              >
-                <td style={td}>
-                  <input
-                    type="checkbox"
-                    checked={!!selected[r.loc_id]}
-                    onChange={() => toggleSelected(r.loc_id)}
-                  />
-                </td>
+      {/* Table */}
+      {sortedResults.length > 0 && (
+        <div className="gf-table-wrapper">
+          <table className="gf-table">
+            <thead>
+              <tr>
+                <th>Select</th>
 
                 {showColumns.symbol && (
-                  <td style={td}>{r.symbol || "—"}</td>
+                  <th style={th("symbol")} onClick={() => handleSort("symbol")}>
+                    Symbol{sortIndicator("symbol")}
+                  </th>
                 )}
 
                 {showColumns.loc_id && (
-                  <td style={td}>{r.loc_id || "—"}</td>
+                  <th style={th("loc_id")} onClick={() => handleSort("loc_id")}>
+                    Gene ID{sortIndicator("loc_id")}
+                  </th>
                 )}
 
                 {showColumns.source && (
-                  <td style={td}>{r.source || "—"}</td>
+                  <th style={th("source")} onClick={() => handleSort("source")}>
+                    Source{sortIndicator("source")}
+                  </th>
                 )}
 
                 {showColumns.pmid && (
-                  <td style={td}>
-                    {r.pmids.length === 0
-                      ? "—"
-                      : r.pmids.map((p, i) => (
+                  <th style={th("pmid")} onClick={() => handleSort("pmid")}>
+                    PMIDs{sortIndicator("pmid")}
+                  </th>
+                )}
+
+                {showColumns.evidence && (
+                  <th
+                    style={th("evidence")}
+                    onClick={() => handleSort("evidence")}
+                  >
+                    Evidence{sortIndicator("evidence")}
+                  </th>
+                )}
+              </tr>
+            </thead>
+
+            <tbody>
+              {sortedResults.map(r => {
+                const geneId = r.loc_id || r.symbol;
+
+                return (
+                  <tr
+                    key={geneId}
+                    className={selected[geneId] ? "selected" : ""}
+                  >
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={!!selected[geneId]}
+                        onChange={() => toggleSelected(geneId)}
+                      />
+                    </td>
+
+                    {showColumns.symbol && <td style={td}>{r.symbol}</td>}
+
+                    {showColumns.loc_id && <td style={td}>{r.loc_id}</td>}
+
+                    {showColumns.source && <td style={td}>{r.source}</td>}
+
+                    {showColumns.pmid && (
+                      <td style={td}>
+                        {r.pmids.map((p, i) => (
                           <span key={p.pmid}>
                             <a
                               href={`https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/`}
@@ -321,27 +397,27 @@ export default function GeneFinder() {
                             {i < r.pmids.length - 1 ? ", " : ""}
                           </span>
                         ))}
-                  </td>
-                )}
+                      </td>
+                    )}
 
-                {showColumns.evidence && (
-                  <td style={td}>
-                    {r.pmids.length === 0
-                      ? "—"
-                      : r.pmids.map((p, i) => (
+                    {showColumns.evidence && (
+                      <td style={td}>
+                        {r.pmids.map(p => (
                           <div key={p.pmid}>
                             <strong>PMID {p.pmid}</strong> — {p.title}
                           </div>
                         ))}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
-      {!loading && mergedResults.length === 0 && phenotype.trim() && (
+      {!loading && sortedResults.length === 0 && phenotype && (
         <p>No results found.</p>
       )}
     </div>
