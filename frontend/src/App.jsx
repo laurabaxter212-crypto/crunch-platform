@@ -3,8 +3,9 @@ import React from "react";
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 
 import Home from "./pages/Home";
-import GeneFinder from "./pages/GeneFinder";
+import GeneFinder from "./pages/GeneFinder.jsx";
 import Analysis from "./pages/Analysis.jsx";
+import HeatmapPage from "./pages/HeatmapPage.jsx";
 import NotFound from "./pages/NotFound";
 
 export default function App() {
@@ -14,17 +15,18 @@ export default function App() {
         <nav style={{ marginBottom: 12 }}>
           <Link to="/">Home</Link> {" | "}
           <Link to="/genes">Find genes</Link> {" | "}
-          <Link to="/analysis">Run analysis</Link>
+          <Link to="/analysis">Run analysis</Link> {" | "}
+          <Link to="/heatmap">Heatmap</Link>
         </nav>
 
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/genes" element={<GeneFinder />} />
           <Route path="/analysis" element={<Analysis />} />
+          <Route path="/heatmap" element={<HeatmapPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
     </BrowserRouter>
   );
 }
-
