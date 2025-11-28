@@ -4,7 +4,7 @@ from backend.data.load_data import DATASETS
 from backend.analysis.subset import subset_variants_by_genes
 from backend.analysis.encoding import encode_genotypes
 from backend.analysis.dimensionality import compute_pca, compute_mds
-from backend.analysis.clustering import compute_pairwise_distance, hierarchical_cluster
+from backend.analysis.clustering import hierarchical_cluster
 import numpy as np
 
 router = APIRouter(tags=["visualisation"])
@@ -59,45 +59,68 @@ def pca_mds(species: str, req: dict):
 
 
 # ---------------------------------------------------------------------
-#  HEATMAP (pairwise distance + hierarchical clustering)
+#  HEATMAP (hierarchical clustering)
 # ---------------------------------------------------------------------
 @router.post("/{species}/heatmap")
 def heatmap(species: str, req: dict):
+
     ds = DATASETS.get(species)
     if ds is None:
         raise HTTPException(404, f"Unknown species '{species}'")
-    if not ds.loaded:
-        raise HTTPException(503, f"Dataset for '{species}' not loaded")
+    ds.ensure_loaded()
 
-    if ds.gene_to_variants is None:
-        raise HTTPException(503, f"Gene-to-variant index missing for '{species}'")
+    # --- sample selection ---
+    requested_samples = req.get("samples", None)
+    if requested_samples:
+        sample_map = { clean_sample(s): i for i, s in enumerate(ds.samples) }
+        sample_idx = [sample_map[clean_sample(s)] for s in requested_samples]
+        samples = requested_samples
+    else:
+        sample_idx = list(range(len(ds.samples)))
+        samples = [clean_sample(s) for s in ds.samples]
 
-    # Inputs
-    gene_blocks = [b.get("genes", []) for b in req.get("phenotype_blocks", [])]
-    combine = req.get("combine", "union")
-    metric = req.get("distance_metric", "numeric")
-    linkage_method = req.get("linkage", "ward")
+    # --- all SNP mode? ---
+    use_all = bool(req.get("use_all", False))
+    max_snps = int(req.get("max_snps", 100000))
 
-    # Variant subset
-    variant_idx = subset_variants_by_genes(gene_blocks, combine, ds.gene_to_variants)
-    if len(variant_idx) == 0:
-        return {"error": "No variants found for selected genes"}
+    if use_all:
+        total = ds.gt.shape[0]
+        max_snps = min(max_snps, total)
+        idx = np.random.choice(total, size=max_snps, replace=False)
+        gt = ds.gt[idx][:, sample_idx, :]
+        geno = encode_genotypes(gt)
+        dist = np.abs(geno[:, :, None] - geno[:, None, :]).mean(axis=0)
 
-    # Genotypes
-    gt = ds.gt.get_orthogonal_selection((variant_idx, slice(None), slice(None)))
-    geno = encode_genotypes(gt)
+    else:
+        blocks = req.get("phenotype_blocks", [])
+        if not blocks:
+            raise HTTPException(400, "phenotype_blocks required unless use_all=true")
 
-    # Pairwise distance + clustering
-    D = compute_pairwise_distance(geno, metric=metric)
-    Z, order = hierarchical_cluster(D, method=linkage_method)
+        # GENES → VARIANTS
+        gene_blocks = [b.get("genes", []) for b in blocks]
+        variant_idx = subset_variants_by_genes(gene_blocks, "union", ds.gene_to_variants)
+        if len(variant_idx) == 0:
+            return {"error": "No variants found"}
 
-    # Reorder output
-    reordered_samples = [clean_sample(ds.samples[i]) for i in order]
-    D_reordered = D[np.ix_(order, order)]
+        gt = ds.gt.get_orthogonal_selection((variant_idx, sample_idx, slice(None)))
+        geno = encode_genotypes(gt)
+        dist = np.abs(geno[:, :, None] - geno[:, None, :]).mean(axis=0)
+
+    # --- cluster ---
+    cluster = hierarchical_cluster(dist)
+
+    order = cluster["order"]
+    reordered_samples = [samples[i] for i in order]
 
     return {
         "samples": reordered_samples,
-        "distance_matrix": D_reordered.tolist(),
-        "linkage_tree": Z.tolist(),
-        "n_variants": len(variant_idx)
+        "distance_matrix": cluster["distance_matrix_reordered"].tolist(),
+        "dendrogram": {
+            "icoord": cluster["icoord"],
+            "dcoord": cluster["dcoord"],
+            "labels": reordered_samples,
+            "leaves": order,
+        },
+        "n_variants": dist.shape[0],
+        "max_snps_used": int(max_snps),
     }
