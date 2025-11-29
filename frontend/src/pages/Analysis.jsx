@@ -1,7 +1,26 @@
 // frontend/src/pages/Analysis.jsx
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import Plot from "react-plotly.js";
-import { getSamples, runSimilarity, runPcaMds } from "../api/index.js";
+import { getSamples, runSimilarity, runPcaMds, API } from "../api/index.js";
+
+const DEFAULT_CATEGORICAL_PALETTE = [
+  "#440154", "#3b528b", "#21918c", "#5ec962", "#fde725",
+  "#ff7f0e", "#1f77b4", "#d62728", "#9467bd", "#8c564b"
+];
+
+function isNumericArray(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return false;
+  const coerced = arr.map((v) => Number(v)).filter((v) => !Number.isNaN(v));
+  return coerced.length >= 2;
+}
+
+function viridisColor(t) {
+  t = Math.min(1, Math.max(0, t));
+  const r = Math.round(68 + 186 * t - 125 * t * t);
+  const g = Math.round(1 + 136 * t + 131 * t * t);
+  const b = Math.round(84 + 79 * t + 41 * t * t);
+  return `rgb(${r},${g},${b})`;
+}
 
 function csvEscape(s) {
   if (s == null) return "";
@@ -38,6 +57,14 @@ export default function Analysis() {
   const pca2dRef = useRef(null);
   const pca3dRef = useRef(null);
 
+  // metadata
+  const [metadata, setMetadata] = useState({});
+  const [metadataFields, setMetadataFields] = useState([]);
+  const [displayNames, setDisplayNames] = useState({});
+  const [selectedMetadataField, setSelectedMetadataField] = useState(null);
+  const [paletteName, setPaletteName] = useState("default");
+  const [customCategoryColors, setCustomCategoryColors] = useState({});
+
   // load samples whenever species changes
   useEffect(() => {
     let mounted = true;
@@ -50,6 +77,23 @@ export default function Analysis() {
         if (!mounted) return;
         setSamples(list);
         if (list.length > 0) setReference(list[0]);
+
+        // Fetch metadata fields
+        const fieldsResp = await fetch(`${API}/api/${species}/metadata/fields`);
+        if (fieldsResp.ok) {
+          const fieldsJson = await fieldsResp.json();
+          if (mounted) {
+            setMetadataFields(fieldsJson.fields || []);
+            setDisplayNames(fieldsJson.display_names || {});
+          }
+        }
+
+        // Fetch metadata
+        const metaResp = await fetch(`${API}/api/${species}/metadata`);
+        if (metaResp.ok) {
+          const metaJson = await metaResp.json();
+          if (mounted) setMetadata(metaJson);
+        }
       } catch (err) {
         console.error("Failed to load samples:", err);
         setSamples([]);
@@ -213,6 +257,52 @@ export default function Analysis() {
       samplesList: pcaData.samples,
     };
   }, [pcaData, pcX, pcY, pcZ]);
+
+  // === compute metadata colors for PCA ===
+  const { metadataColors, categoricalMap, numericRange } = useMemo(() => {
+    if (!selectedMetadataField || !metadata || !pcaData?.samples) {
+      return { metadataColors: null, categoricalMap: null, numericRange: null };
+    }
+
+    const vals = pcaData.samples.map((s) => {
+      const v = metadata?.[s]?.[selectedMetadataField];
+      return v === undefined ? null : v;
+    });
+
+    const nonNull = vals.filter((v) => v !== null);
+    const numeric = isNumericArray(nonNull);
+
+    if (numeric) {
+      const nums = nonNull.map((v) => Number(v));
+      const min = Math.min(...nums);
+      const max = Math.max(...nums);
+      const denom = max === min ? 1 : (max - min);
+      const colors = vals.map((v) => (v === null ? "#cccccc" : viridisColor((Number(v) - min) / denom)));
+      return { metadataColors: colors, categoricalMap: null, numericRange: { min, max } };
+    } else {
+      const uniq = Array.from(new Set(nonNull));
+
+      const PRESET_PALETTES = {
+        default: DEFAULT_CATEGORICAL_PALETTE,
+        pastel: ["#fbb4ae", "#b3cde3", "#ccebc5", "#decbe4", "#fed9a6", "#ffffcc", "#e5d8bd", "#fddaec", "#f2f2f2"],
+        vibrant: ["#d7191c", "#fdae61", "#ffffbf", "#a6d96a", "#1a9641", "#2b83ba", "#7b3294", "#f46d43", "#66c2a5"],
+        set2: ["#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3"],
+      };
+
+      const palette = PRESET_PALETTES[paletteName] || DEFAULT_CATEGORICAL_PALETTE;
+
+      const cmap = {};
+      uniq.forEach((u, i) => {
+        if (customCategoryColors && customCategoryColors[u]) {
+          cmap[u] = customCategoryColors[u];
+        } else {
+          cmap[u] = palette[i % palette.length];
+        }
+      });
+      const colors = vals.map((v) => (v === null ? "#cccccc" : (cmap[v] || "#999999")));
+      return { metadataColors: colors, categoricalMap: cmap, numericRange: null };
+    }
+  }, [selectedMetadataField, metadata, pcaData?.samples, paletteName, customCategoryColors]);
 
   // click handlers & highlight/scroll
   useEffect(() => {
@@ -386,7 +476,7 @@ export default function Analysis() {
 
         {/* PCA plots */}
         <div style={{ flex: 1.2, minWidth: 420 }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
             <div>
               <label style={{ display: "block", fontWeight: 600 }}>X axis</label>
               <select value={pcX} onChange={(e) => setPcX(Number(e.target.value))}>
@@ -426,6 +516,34 @@ export default function Analysis() {
               </select>
             </div>
 
+            {/* Metadata field selector */}
+            {Array.isArray(metadataFields) && metadataFields.length > 0 && (
+              <div>
+                <label style={{ display: "block", fontWeight: 600 }}>Color by metadata</label>
+                <select value={selectedMetadataField || ""} onChange={(e) => setSelectedMetadataField(e.target.value || null)}>
+                  <option value="">-- none --</option>
+                  {metadataFields.map((f) => (
+                    <option key={f} value={f}>
+                      {displayNames && displayNames[f] ? displayNames[f] : f}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Palette selector */}
+            {selectedMetadataField && (
+              <div>
+                <label style={{ display: "block", fontWeight: 600 }}>Palette</label>
+                <select value={paletteName} onChange={(e) => setPaletteName(e.target.value)}>
+                  <option value="default">Default</option>
+                  <option value="pastel">Pastel</option>
+                  <option value="vibrant">Vibrant</option>
+                  <option value="set2">Set2</option>
+                </select>
+              </div>
+            )}
+
             <div style={{ display: "flex", alignItems: "center" }}>
               <input id="toggle3d" type="checkbox" checked={show3d} onChange={(e) => setShow3d(e.target.checked)} />
               <label htmlFor="toggle3d" style={{ marginLeft: 6 }}>
@@ -456,6 +574,57 @@ export default function Analysis() {
             )}
           </div>
 
+          {/* Metadata legend */}
+          {selectedMetadataField && (
+            <div style={{ marginBottom: 8, padding: 8, background: "#fafafa", borderRadius: 4 }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                {displayNames[selectedMetadataField] || selectedMetadataField}
+              </div>
+              {numericRange ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{
+                    width: 200,
+                    height: 12,
+                    borderRadius: 4,
+                    background: "linear-gradient(to right, #440154, #414487, #2a788e, #22a884, #fde725)",
+                    border: "1px solid #ccc"
+                  }} />
+                  <div style={{ fontSize: 12 }}>
+                    {numericRange.min?.toFixed(2)} → {numericRange.max?.toFixed(2)}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  {categoricalMap && Object.entries(categoricalMap).map(([k, col]) => (
+                    <div key={k} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 12, height: 12, background: col, borderRadius: 2 }} />
+                      <div style={{ fontSize: 12 }}>{k}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Per-category color pickers for categorical metadata */}
+              {categoricalMap && (
+                <div style={{ marginTop: 6, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {Object.entries(categoricalMap).map(([k, col]) => (
+                    <div key={`picker-${k}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <input
+                        type="color"
+                        value={col}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setCustomCategoryColors((prev) => ({ ...prev, [k]: v }));
+                        }}
+                      />
+                      <div style={{ fontSize: 12 }}>{k}</div>
+                    </div>
+                  ))}
+                  <button onClick={() => setCustomCategoryColors({})}>Reset colors</button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 2D PCA */}
           <div style={{ border: "1px solid #eee", borderRadius: 6, padding: 8 }}>
             <h4>PCA (2D)</h4>
@@ -464,15 +633,110 @@ export default function Analysis() {
                 <div style={{ textAlign: "right", marginBottom: 6 }}>
                   <button
                     onClick={async () => {
-                      // export PNG using plotly's toImage by importing plotly.js-dist dynamically
+                      // export PNG using plotly's toImage with legend overlay
                       try {
                         if (!pca2dRef.current) return;
                         const Plotly = await import("plotly.js-dist");
                         const url = await Plotly.toImage(pca2dRef.current, { format: "png", width: 1200, height: 900 });
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = "pca_2d.png";
-                        a.click();
+
+                        // Helper: composite legend onto exported image
+                        async function compositeAndDownload(imgDataUrl) {
+                          try {
+                            const imgEl = new Image();
+                            imgEl.src = imgDataUrl;
+                            await new Promise((res) => { imgEl.onload = res; imgEl.onerror = res; });
+
+                            const cw = imgEl.width;
+                            const ch = imgEl.height;
+                            const canvas = document.createElement('canvas');
+                            canvas.width = cw;
+                            canvas.height = ch;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(imgEl, 0, 0);
+
+                            // Draw legend if metadata is selected
+                            if (selectedMetadataField && (metadataColors || categoricalMap || numericRange)) {
+                              try {
+                                const titleText = (displayNames && displayNames[selectedMetadataField]) ? displayNames[selectedMetadataField] : selectedMetadataField;
+                                const legendWidth = 260;
+                                const legendX = cw - legendWidth - 15;
+                                let legendY = Math.max(ch * 0.88, ch - 120);
+
+                                let entriesCount = 0;
+                                if (numericRange) {
+                                  entriesCount = 1;
+                                } else if (categoricalMap) {
+                                  entriesCount = Object.keys(categoricalMap).length;
+                                }
+                                const entriesHeight = entriesCount * 20 + 24;
+
+                                // draw white background box
+                                ctx.fillStyle = 'rgba(255,255,255,0.95)';
+                                const pad = 10;
+                                const bgX = legendX - pad / 2;
+                                const bgY = legendY - 8;
+                                const bgW = legendWidth + pad;
+                                const bgH = entriesHeight + pad;
+                                ctx.fillRect(bgX, bgY, bgW, bgH);
+                                ctx.strokeStyle = 'rgba(200,200,200,0.9)';
+                                ctx.lineWidth = 1;
+                                ctx.strokeRect(bgX, bgY, bgW, bgH);
+
+                                // draw title
+                                ctx.font = '14px sans-serif';
+                                ctx.fillStyle = '#000';
+                                ctx.fillText(titleText, legendX, legendY + 12);
+                                legendY += 22;
+
+                                if (categoricalMap) {
+                                  // Draw categorical legend
+                                  const entries = Object.entries(categoricalMap);
+                                  const rowH = 20;
+                                  entries.forEach(([k, col], i) => {
+                                    const y = legendY + i * rowH;
+                                    ctx.fillStyle = col || '#cccccc';
+                                    ctx.fillRect(legendX, y, 14, 14);
+                                    ctx.fillStyle = '#000';
+                                    ctx.font = '12px sans-serif';
+                                    ctx.fillText(k, legendX + 20, y + 12);
+                                  });
+                                } else if (numericRange) {
+                                  // Draw numeric gradient
+                                  const gradW = 140;
+                                  const gradH = 12;
+                                  const gx = legendX;
+                                  const gy = legendY;
+                                  const steps = 40;
+                                  for (let s = 0; s < steps; s++) {
+                                    const frac = s / (steps - 1);
+                                    ctx.fillStyle = viridisColor(frac);
+                                    ctx.fillRect(gx + (s / steps) * gradW, gy, gradW / steps + 1, gradH);
+                                  }
+                                  ctx.fillStyle = '#000';
+                                  ctx.font = '11px sans-serif';
+                                  ctx.fillText(numericRange.min?.toFixed(2), gx, gy + gradH + 14);
+                                  ctx.fillText(numericRange.max?.toFixed(2), gx + gradW - 30, gy + gradH + 14);
+                                }
+                              } catch (e) {
+                                console.warn('Legend drawing failed', e);
+                              }
+                            }
+
+                            const composite = canvas.toDataURL('image/png');
+                            const a = document.createElement('a');
+                            a.href = composite;
+                            a.download = 'pca_2d.png';
+                            a.click();
+                          } catch (e) {
+                            // If canvas compositing fails, fall back to raw Plotly export
+                            const a = document.createElement("a");
+                            a.href = imgDataUrl;
+                            a.download = "pca_2d.png";
+                            a.click();
+                          }
+                        }
+
+                        await compositeAndDownload(url);
                       } catch (err) {
                         alert("Failed to export PNG: " + err);
                       }
@@ -493,7 +757,7 @@ export default function Analysis() {
                       marker: {
                         size: 8,
                         opacity: 0.9,
-                        color: pcaData.samples.map((s) => {
+                        color: metadataColors || pcaData.samples.map((s) => {
                           if (s === reference) return "green";
                           if (s === highlightSample) return "red";
                           return "#1f77b4";
@@ -531,7 +795,7 @@ export default function Analysis() {
                       type: "scatter3d",
                       marker: {
                         size: 4,
-                        color: pcaData.samples.map((s) => {
+                        color: metadataColors || pcaData.samples.map((s) => {
                           if (s === reference) return "green";
                           if (s === highlightSample) return "red";
                           return "#1f77b4";
