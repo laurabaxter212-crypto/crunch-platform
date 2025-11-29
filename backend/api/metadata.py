@@ -7,9 +7,9 @@ from backend.metadata.store import MetadataStore
 from backend.utils.metadata_utils import parse_csv_or_json_filebytes, validate_samples
 
 router = APIRouter(prefix="", tags=["metadata"])
+# app registers routers with prefix "/api" already (see backend/app.py)
 
 def get_metadata_store_for_species(species: str) -> MetadataStore:
-    # Use the same data root as your existing data layout (backend/data/)
     return MetadataStore(species=species)
 
 @router.get("/{species}/metadata")
@@ -23,13 +23,19 @@ def get_metadata(species: str):
 
 @router.get("/{species}/metadata/fields")
 def get_metadata_fields(species: str):
+    """
+    Return only the configured/exposed metadata fields and the display names map.
+    Response:
+      { "fields": ["colour", ...], "display_names": { "colour": "Colour", ... } }
+    """
     ds = DATASETS.get(species)
     if ds is None:
         raise HTTPException(status_code=404, detail=f"Unknown species: {species}")
     ds.ensure_loaded()
     store = get_metadata_store_for_species(species)
-    # Optionally return type inference in the future
-    return {"fields": store.get_fields()}
+    fields = store.get_exposed_fields()
+    display_names = store.get_display_names_map()
+    return {"fields": fields, "display_names": display_names}
 
 @router.post("/{species}/metadata/upload")
 async def upload_metadata(
@@ -37,16 +43,6 @@ async def upload_metadata(
     file: UploadFile = File(...),
     allow_unknown: Optional[bool] = Query(False, description="If true, unknown samples are added to metadata instead of rejecting")
 ):
-    """
-    Upload CSV/TSV/JSON metadata for a species.
-
-    Query param:
-      - allow_unknown (bool): if true, unknown samples will be added to metadata (use with care).
-
-    Responses:
-      - 200 OK with {"status":"ok","updated":[<samples>]}
-      - 400 with {"error": "...", "unknown_samples": [...], "matched_samples": [...]} if unknown samples found and allow_unknown==false
-    """
     ds = DATASETS.get(species)
     if ds is None:
         raise HTTPException(status_code=404, detail=f"Unknown species: {species}")
@@ -68,7 +64,7 @@ async def upload_metadata(
             "matched_samples": matched
         })
 
-    # If allow_unknown, treat unknown samples as valid keys (we still persist them)
+    # Merge parsed metadata into store and persist
     store.merge(parsed)
-    return {"status": "ok", "updated": list(parsed.keys())}
 
+    return {"status": "ok", "updated": list(parsed.keys())}

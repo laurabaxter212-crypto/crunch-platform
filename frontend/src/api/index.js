@@ -1,5 +1,5 @@
 // frontend/src/api/index.js
-const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
+export const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 /** Helper for POST requests */
 async function postJson(path, payload) {

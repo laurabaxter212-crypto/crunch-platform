@@ -1,14 +1,21 @@
 import React, { useState } from "react";
-import { postHeatmap, getSamples } from "../api";
+import { postHeatmap, getSamples, API } from "../api";   // <-- API imported here
 import DistanceClustergram from "../components/DistanceClustergram";
 
 export default function HeatmapPage() {
+    // NEW: metadata state
+  const [metadata, setMetadata] = useState({});
+  const [metadataFields, setMetadataFields] = useState([]);
+  const [displayNames, setDisplayNames] = useState({});
+
   const [species, setSpecies] = useState("carrot");
   const [blocks, setBlocks] = useState([{ genes: "" }]);
   const [useAll, setUseAll] = useState(false);
-  const [selectedSamples, setSelectedSamples] = useState([]); // array of sample IDs
+  const [selectedSamples, setSelectedSamples] = useState([]);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+
+
 
   async function runHeatmap() {
     setLoading(true);
@@ -30,8 +37,84 @@ export default function HeatmapPage() {
     if (selectedSamples.length > 0) payload.samples = selectedSamples;
 
     try {
+      //
+      // 1. RUN HEATMAP
+      //
       const res = await postHeatmap(species, payload);
       setResult(res);
+
+      //
+      // 2. FETCH METADATA CONFIG  (patched URL)
+      //
+      //const fieldsResp = await fetch(`${API}/api/${species}/metadata/fields`);
+      //if (fieldsResp.ok) {
+      //  const fieldsJson = await fieldsResp.json();
+      //  setMetadataFields(fieldsJson.fields || []);
+      //  setDisplayNames(fieldsJson.display_names || {});
+      //} else {
+      //  console.warn("Failed to fetch metadata fields");
+      //}
+// ---- DEBUG START ----
+console.log("Fetching metadata fields from:", `${API}/api/${species}/metadata/fields`);
+// ---- DEBUG END ----
+
+const fieldsResp = await fetch(`${API}/api/${species}/metadata/fields`);
+if (fieldsResp.ok) {
+  const fieldsJson = await fieldsResp.json();
+
+  // ---- DEBUG START ----
+  console.log("FIELDS JSON returned by backend:", fieldsJson);
+  console.log("Setting metadataFields:", fieldsJson.fields);
+  // ---- DEBUG END ----
+
+  setMetadataFields(fieldsJson.fields || []);
+  setDisplayNames(fieldsJson.display_names || {});
+
+  // ---- DEBUG START ----
+  setTimeout(() => {
+    console.log("React state → metadataFields now:", metadataFields);
+    console.log("React state → displayNames now:", displayNames);
+  }, 500);
+  // ---- DEBUG END ----
+
+} else {
+  console.warn("Failed to fetch metadata fields");
+}
+
+      //
+      // 3. FETCH METADATA TABLE (patched URL)
+      //
+      //const metaResp = await fetch(`${API}/api/${species}/metadata`);
+      //if (metaResp.ok) {
+      //  const metaJson = await metaResp.json();
+      //  setMetadata(metaJson);
+      //} else {
+      //  console.warn("Failed to fetch metadata");
+      //}
+      // ---- DEBUG START ----
+console.log("Fetching metadata table from:", `${API}/api/${species}/metadata`);
+// ---- DEBUG END ----
+
+const metaResp = await fetch(`${API}/api/${species}/metadata`);
+if (metaResp.ok) {
+  const metaJson = await metaResp.json();
+
+  // ---- DEBUG START ----
+  console.log("METADATA JSON (sample → values) returned:", metaJson);
+  // ---- DEBUG END ----
+
+  setMetadata(metaJson);
+
+  // ---- DEBUG START ----
+  setTimeout(() => {
+    console.log("React state → metadata now:", metadata);
+  }, 500);
+  // ---- DEBUG END ----
+
+} else {
+  console.warn("Failed to fetch metadata");
+}
+
     } catch (err) {
       console.error("Heatmap error:", err);
       alert("Heatmap request failed: " + (err.message || err));
@@ -62,7 +145,8 @@ export default function HeatmapPage() {
 
       <div style={{ marginBottom: 12 }}>
         <label>
-          <input type="checkbox" checked={useAll} onChange={(e) => setUseAll(e.target.checked)} /> Use all SNPs (downsampled by backend)
+          <input type="checkbox" checked={useAll} onChange={(e) => setUseAll(e.target.checked)} />{" "}
+          Use all SNPs (downsampled by backend)
         </label>
         {useAll && (
           <div style={{ marginTop: 8, padding: 8, background: "#eef5ff", borderRadius: 6 }}>
@@ -133,8 +217,10 @@ export default function HeatmapPage() {
             samples={result.samples}
             matrix={result.distance_matrix}
             dendrogram={result.dendrogram}
+            metadata={metadata}
+            metadataFields={metadataFields}
+            displayNames={displayNames}
           />
-
         </div>
       )}
     </div>
