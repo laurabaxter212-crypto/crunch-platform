@@ -7,6 +7,7 @@ import GeneFinder from "./pages/GeneFinder.jsx";
 import Analysis from "./pages/Analysis.jsx";
 import HeatmapPage from "./pages/HeatmapPage.jsx";
 import NotFound from "./pages/NotFound";
+import QcSummaryPage from "./pages/QcSummary.jsx";
 
 export default function App() {
   return (
@@ -16,7 +17,8 @@ export default function App() {
           <Link to="/">Home</Link> {" | "}
           <Link to="/genes">Find genes</Link> {" | "}
           <Link to="/analysis">Run analysis</Link> {" | "}
-          <Link to="/heatmap">Heatmap</Link>
+          <Link to="/heatmap">Heatmap</Link> {" | "}
+          <Link to="/qc">QC Summary</Link>
         </nav>
 
         <Routes>
@@ -25,6 +27,7 @@ export default function App() {
           <Route path="/analysis" element={<Analysis />} />
           <Route path="/heatmap" element={<HeatmapPage />} />
           <Route path="*" element={<NotFound />} />
+          <Route path="/qc" element={<QcSummaryPage />} />
         </Routes>
       </div>
     </BrowserRouter>

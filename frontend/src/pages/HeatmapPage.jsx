@@ -150,7 +150,7 @@ if (metaResp.ok) {
         </label>
         {useAll && (
           <div style={{ marginTop: 8, padding: 8, background: "#eef5ff", borderRadius: 6 }}>
-            <strong>Note:</strong> "Use all SNPs" uses backend downsampling. The backend will decide the actual number used.
+            <strong>Note:</strong> "Use all SNPs" uses backend downsampling. {result ? `The backend used ${result.max_snps_used?.toLocaleString()} SNPs.` : "The backend will decide the actual number used."}
           </div>
         )}
       </div>

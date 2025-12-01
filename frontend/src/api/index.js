@@ -77,3 +77,13 @@ export async function searchKnowledge(species, phenotype) {
   }
   return r.json();
 }
+
+// ---- QC ----
+export async function fetchQcSummary(species = "carrot") {
+  const url = `${API}/api/${encodeURIComponent(species)}/qc/summary`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch QC summary: ${res.status} ${await res.text()}`);
+  }
+  return res.json();
+}
