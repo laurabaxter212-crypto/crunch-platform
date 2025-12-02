@@ -2,6 +2,8 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import Plot from "react-plotly.js";
 import { getSamples, runSimilarity, runPcaMds, API } from "../api/index.js";
+import DistanceClustergram from "../components/DistanceClustergram.jsx";
+import { postHeatmap } from "../api";
 
 const DEFAULT_CATEGORICAL_PALETTE = [
   "#440154", "#3b528b", "#21918c", "#5ec962", "#fde725",
@@ -64,6 +66,10 @@ export default function Analysis() {
   const [selectedMetadataField, setSelectedMetadataField] = useState(null);
   const [paletteName, setPaletteName] = useState("default");
   const [customCategoryColors, setCustomCategoryColors] = useState({});
+
+  // heatmap state
+  const [heatmapResult, setHeatmapResult] = useState(null);
+  const [heatmapLoading, setHeatmapLoading] = useState(false);
 
   // load samples whenever species changes
   useEffect(() => {
@@ -185,6 +191,51 @@ export default function Analysis() {
       setPcaData(null);
     }
   }
+
+  // heatmap handlers
+  async function runHeatmapFromGenes() {
+  setHeatmapLoading(true);
+  setHeatmapResult(null);
+
+  try {
+    const payload = {
+      phenotype_blocks: blocks
+        .map(b => ({
+          genes: (b.text || "")
+            .split(/[\s,]+/)
+            .map(g => g.trim())
+            .filter(Boolean),
+        }))
+        .filter(b => b.genes.length > 0),
+      combine: "union",
+    };
+
+
+    const raw = await postHeatmap(species, payload);
+    if (raw.error) {
+      alert("Heatmap failed: " + raw.error);
+      return;
+    }
+    const normalized = {
+      samples: raw.samples ?? [],
+      distance_matrix: raw.distance_matrix_reordered ?? raw.distance_matrix ?? [],
+      dendrogram: {
+        icoord: raw.icoord ?? raw.dendrogram?.icoord ?? [],
+        dcoord: raw.dcoord ?? raw.dendrogram?.dcoord ?? [],
+        order: raw.order ?? raw.dendrogram?.order ?? [],
+      },
+      n_variants: raw.n_variants,
+      n_samples: raw.n_samples ?? (raw.samples ? raw.samples.length : null),
+    };
+
+    setHeatmapResult(normalized);
+  } catch (err) {
+    alert("Heatmap computation failed: " + err);
+  } finally {
+    setHeatmapLoading(false);
+  }
+}
+
 
   // displayed results sort
   const displayedResults = useMemo(() => {
@@ -384,8 +435,11 @@ export default function Analysis() {
           <button onClick={handleRunPcaMds} disabled={phenotypeBlocks.every((b) => !b.genes.length)}>
             Compute PCA / MDS
           </button>
+          <button onClick={runHeatmapFromGenes} disabled={heatmapLoading}>
+            {heatmapLoading ? "Computing heatmap…" : "Compute gene-set heatmap"}
+          </button>
         </div>
-      </div>
+        </div>
 
       {/* blocks input */}
       <div style={{ marginBottom: 12 }}>
@@ -830,7 +884,27 @@ export default function Analysis() {
           )}
         </div>
       </div>
+      {heatmapResult && (
+        <div style={{ marginTop: 30 }}>
+          <h3>Gene-Set Heatmap</h3>
 
+          <div style={{ marginBottom: 8 }}>
+            <strong>Samples:</strong> {heatmapResult.n_samples} &nbsp;|&nbsp;
+            <strong>Variants:</strong> {heatmapResult.n_variants}
+          </div>
+
+          <DistanceClustergram
+            samples={heatmapResult.samples}
+            matrix={heatmapResult.distance_matrix}
+            dendrogram={heatmapResult.dendrogram}
+            metadata={metadata}
+            metadataFields={metadataFields}
+            displayNames={displayNames}
+          />
+        </div>
+      )}
+
+      {/* error display */}
       {error && (
         <div style={{ marginTop: 12, color: "crimson" }}>
           <strong>Error:</strong> {String(error)}

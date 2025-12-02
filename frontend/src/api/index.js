@@ -59,23 +59,20 @@ export async function fetchHeatmap(payload, species = "carrot") {
   return postJson(`/api/${encodeURIComponent(species)}/heatmap`, payload);
 }
 
-export async function postHeatmap(species, body) {
-  const url = `${API}/api/${encodeURIComponent(species)}/heatmap`;
-
-  const res = await fetch(url, {
+export async function postHeatmap(species, payload) {
+  const resp = await fetch(`${API}/api/${species}/heatmap`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`Heatmap POST failed (${res.status}): ${txt}`);
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Heatmap request failed: ${text}`);
   }
 
-  return res.json();
+  return await resp.json();
 }
-
 
 // ---- Gene Finder ----
 export async function searchKnowledge(species, phenotype) {
