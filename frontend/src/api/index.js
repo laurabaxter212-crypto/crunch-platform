@@ -28,6 +28,14 @@ export async function getSamples(species = "carrot") {
   return r.json(); // returns { samples: [...] }
 }
 
+// ---- Variant count ----
+export async function getVariantCount(species = "carrot") {
+  const url = `${API}/api/${encodeURIComponent(species)}/variant_count`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Failed to fetch variant count: ${r.status}`);
+  return r.json(); // returns { species, n_variants }
+}
+
 // ---- Similarity ----
 export async function runSimilarity(payload, species = "carrot") {
   return postJson(`/api/${encodeURIComponent(species)}/similarity`, payload);

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { postHeatmap, getSamples, API } from "../api";   // <-- API imported here
+import { postHeatmap, getSamples, getVariantCount, API } from "../api";   // <-- API imported here
 import DistanceClustergram from "../components/DistanceClustergram";
 
 export default function HeatmapPage() {
@@ -15,7 +15,24 @@ export default function HeatmapPage() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  const [maxSnps, setMaxSnps] = useState(50000);
+  const [sampling, setSampling] = useState("deterministic");
+  const [seed, setSeed] = useState(42);
+  const [variantCount, setVariantCount] = useState(null);
 
+  // Fetch variant count when species changes
+  React.useEffect(() => {
+    const fetchVariantCount = async () => {
+      try {
+        const data = await getVariantCount(species);
+        setVariantCount(data.n_variants);
+      } catch (err) {
+        console.warn("Failed to fetch variant count:", err);
+        setVariantCount(null);
+      }
+    };
+    fetchVariantCount();
+  }, [species]);
 
   async function runHeatmap() {
     setLoading(true);
@@ -24,6 +41,16 @@ export default function HeatmapPage() {
     const payload = {};
     if (useAll) {
       payload.use_all = true;
+      // send aliases accepted by backend visualisation; keep compatibility with similarity endpoint
+      payload.max_snps = Number(maxSnps) || 100000;
+      payload.sampling = sampling; // alias accepted by visualisation.py
+      // also send alternative keys used by similarity endpoint for compatibility
+      payload.downsample_n = Number(maxSnps) || 100000;
+      payload.downsample_mode = sampling;
+      if (sampling === "random") {
+        if (seed !== null && seed !== undefined && seed !== "") payload.seed = seed;
+        payload.random_seed = seed;
+      }
     } else {
       payload.phenotype_blocks = blocks
         .map((b) => ({
@@ -36,12 +63,30 @@ export default function HeatmapPage() {
     }
     if (selectedSamples.length > 0) payload.samples = selectedSamples;
 
+    // DEBUG: log payload before sending
+    console.log("Heatmap payload before sending:", payload);
+
     try {
       //
       // 1. RUN HEATMAP
       //
-      const res = await postHeatmap(species, payload);
-      setResult(res);
+      const raw = await postHeatmap(species, payload);
+
+// Normalize backend response fields to what DistanceClustergram expects
+const normalized = {
+  samples: raw.samples_reordered ?? raw.samples,
+  distance_matrix: raw.distance_matrix_reordered ?? raw.distance_matrix,
+  dendrogram: {
+    icoord: raw.icoord ?? raw.dendrogram?.icoord ?? [],
+    dcoord: raw.dcoord ?? raw.dendrogram?.dcoord ?? [],
+    order: raw.order ?? raw.dendrogram?.order ?? [],
+  },
+  n_variants: raw.n_variants,
+  max_snps_used: raw.max_snps_used,
+};
+
+setResult(normalized);
+
 
       //
       // 2. FETCH METADATA CONFIG  (patched URL)
@@ -148,11 +193,59 @@ if (metaResp.ok) {
           <input type="checkbox" checked={useAll} onChange={(e) => setUseAll(e.target.checked)} />{" "}
           Use all SNPs (downsampled by backend)
         </label>
+
         {useAll && (
-          <div style={{ marginTop: 8, padding: 8, background: "#eef5ff", borderRadius: 6 }}>
-            <strong>Note:</strong> "Use all SNPs" uses backend downsampling. {result ? `The backend used ${result.max_snps_used?.toLocaleString()} SNPs.` : "The backend will decide the actual number used."}
+          <div style={{ marginTop: 10, padding: 10, background: "#eef5ff" }}>
+            <label>
+              Downsample N SNPs:&nbsp;
+              <input
+                type="number"
+                value={maxSnps}
+                max={50000}
+                onChange={(e) => {
+                  let val = Number(e.target.value) || 0;
+                  if (val > 50000) val = 50000;
+                  setMaxSnps(val);
+                }}
+                style={{ width: 120 }}
+              />
+            </label>
+            {variantCount !== null && (
+              <div style={{ marginTop: 8, fontSize: 12, color: "#555" }}>
+                <strong>Max available:</strong> 50,000 SNPs (database has {variantCount.toLocaleString()} total)
+                {maxSnps > variantCount && (
+                  <div style={{ color: "#d9534f", marginTop: 6 }}>
+                    ⚠ Requested {maxSnps.toLocaleString()} SNPs, but only {variantCount.toLocaleString()} available. Backend will use all.
+                  </div>
+                )}
+              </div>
+            )}
+
+            <br />
+
+            <label>
+              Sampling mode:&nbsp;
+              <select value={sampling} onChange={(e) => setSampling(e.target.value)}>
+                <option value="deterministic">Deterministic</option>
+                <option value="random">Random</option>
+              </select>
+            </label>
+
+            <br />
+
+            <label>
+              Random seed (optional):&nbsp;
+              <input
+                type="number"
+                value={seed}
+                onChange={(e) => setSeed(e.target.value === "" ? null : Number(e.target.value))}
+                placeholder="leave blank for true randomness"
+                style={{ width: 160 }}
+              />
+            </label>
           </div>
         )}
+
       </div>
 
       {!useAll && (
