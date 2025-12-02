@@ -80,17 +80,17 @@ def compute_similarity_matrix(species: str, req: dict):
     cluster = hierarchical_cluster(D)
 
     return {
-        "samples": ds.samples,
-        "n_variants": len(variant_idx),
-        "max_snps_used": int(len(variant_idx)),
-        "distance_matrix": D.tolist(),
-        "distance_matrix_reordered": cluster["distance_matrix_reordered"].tolist(),
-        "order": cluster["order"],
-        "dendrogram": {
-            "icoord": cluster["icoord"],
-            "dcoord": cluster["dcoord"]
-        }
-    }
+    "samples": list(ds.samples),
+    "n_samples": len(ds.samples),
+    "n_variants": int(len(variant_idx)),        # actual variant count used
+    "max_snps_used": int(len(variant_idx)),     # identical for downsampled runs
+    "distance_matrix": D.tolist(),
+    "distance_matrix_reordered": cluster["distance_matrix_reordered"].tolist(),
+    "icoord": cluster["icoord"].tolist(),
+    "dcoord": cluster["dcoord"].tolist(),
+    "order": cluster["order"].tolist(),
+}
+
 
 
 
