@@ -91,6 +91,21 @@ export async function searchKnowledge(species, phenotype) {
   return r.json();
 }
 
+// ---- PubMed ----
+export async function fetchPubmedTitle(pmid) {
+  const r = await fetch(`${API}/api/pubmed/title/${pmid}`);
+  if (!r.ok) {
+    const text = await r.text();
+    console.warn("Backend PubMed title fetch failed:", text);
+    return null;
+  }
+  return r.json();
+}
+function sleep(ms) {
+  return new Promise(res => setTimeout(res, ms));
+}
+
+
 // ---- QC ----
 export async function fetchQcSummary(species = "carrot") {
   const url = `${API}/api/${encodeURIComponent(species)}/qc/summary`;

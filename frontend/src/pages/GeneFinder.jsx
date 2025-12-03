@@ -1,27 +1,9 @@
 import React, { useState, useMemo } from "react";
-import { searchKnowledge } from "../api";
+import { searchKnowledge, fetchPubmedTitle } from "../api";
 import "./GeneFinder.css";
 
-// Cache PubMed titles
-const pmidCache = {};
-
-async function fetchPubmedTitle(pmid) {
-  if (pmidCache[pmid]) return pmidCache[pmid];
-
-  try {
-    const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmid}&retmode=json`;
-    const res = await fetch(url);
-    const json = await res.json();
-    const article = json.result?.[pmid];
-
-    const title = article?.title || "Unknown article";
-    pmidCache[pmid] = title;
-    return title;
-  } catch (err) {
-    console.error("PubMed fetch error:", err);
-    return "Unknown article";
-  }
-}
+// Sleep helper to avoid pubmed hammering
+const sleep = ms => new Promise(res => setTimeout(res, ms));
 
 export default function GeneFinder() {
   const [species, setSpecies] = useState("carrot");
@@ -31,9 +13,9 @@ export default function GeneFinder() {
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState({});
 
-  // Sorting state
+  // Sorting
   const [sortColumn, setSortColumn] = useState("loc_id");
-  const [sortDirection, setSortDirection] = useState("asc"); // "asc" | "desc"
+  const [sortDirection, setSortDirection] = useState("asc");
 
   const [showColumns, setShowColumns] = useState({
     symbol: true,
@@ -43,9 +25,9 @@ export default function GeneFinder() {
     evidence: true
   });
 
-  // -------------------------------------------
-  // FETCH + MERGE
-  // -------------------------------------------
+  // ================================================================
+  // FETCH + MERGE + RATE-SAFE TITLE FETCH
+  // ================================================================
 
   async function doSearch() {
     if (!phenotype.trim()) return;
@@ -69,18 +51,18 @@ export default function GeneFinder() {
             symbol: r.symbol || "",
             loc_id: r.loc_id || "",
             source: r.source || "",
-            pmids: []
+            pmids: [] // [{ pmid, title }]
           };
         }
 
-        // Normalize PMIDs into an array
+        // Normalize PMIDs into array
         if (r.pmid) {
           const pmids = Array.isArray(r.pmid)
             ? r.pmid
             : String(r.pmid).split(/[,\s]+/).filter(Boolean);
 
           pmids.forEach(pmid => {
-            if (!geneMap[geneId].pmids.find(e => e.pmid === pmid)) {
+            if (!geneMap[geneId].pmids.find(x => x.pmid === pmid)) {
               geneMap[geneId].pmids.push({ pmid, title: "Loading…" });
             }
           });
@@ -90,21 +72,40 @@ export default function GeneFinder() {
       const merged = Object.values(geneMap);
       setMergedResults(merged);
 
-      // Fetch evidence titles
-      merged.forEach(gene =>
-        gene.pmids.forEach(async entry => {
-          entry.title = await fetchPubmedTitle(entry.pmid);
-          setMergedResults(prev => [...prev]);
-        })
-      );
+      // -----------------------------------------
+      // Rate-limited PubMed fetch
+      // -----------------------------------------
+      for (const gene of merged) {
+        for (const entry of gene.pmids) {
+          let title = "(title unavailable)";
+
+          try {
+            const res = await fetchPubmedTitle(entry.pmid);
+
+            // backend returns: { pmid, title } or { detail: ... }
+            if (res && typeof res.title === "string") {
+              title = res.title;
+            }
+          } catch (err) {
+            console.warn("PubMed title fetch failed:", entry.pmid, err);
+          }
+
+          entry.title = title;
+          setMergedResults(prev => [...prev]); // trigger re-render
+
+          await sleep(350); // ~3/sec to avoid 429
+        }
+      }
+    } catch (err) {
+      console.error("GeneFinder search failed:", err);
     } finally {
       setLoading(false);
     }
   }
 
-  // -------------------------------------------
+  // ================================================================
   // SORTING
-  // -------------------------------------------
+  // ================================================================
 
   function handleSort(col) {
     if (sortColumn === col) {
@@ -117,7 +118,6 @@ export default function GeneFinder() {
 
   const sortedResults = useMemo(() => {
     const list = [...mergedResults];
-
     list.sort((a, b) => {
       let A, B;
 
@@ -155,9 +155,9 @@ export default function GeneFinder() {
     return list;
   }, [mergedResults, sortColumn, sortDirection]);
 
-  // -------------------------------------------
-  // SELECTION
-  // -------------------------------------------
+  // ================================================================
+  // SELECTION / EXPORT (unchanged)
+  // ================================================================
 
   function toggleSelected(id) {
     setSelected(prev => ({ ...prev, [id]: !prev[id] }));
@@ -176,15 +176,10 @@ export default function GeneFinder() {
     setSelected({});
   }
 
-  // -------------------------------------------
-  // COPY / EXPORT
-  // -------------------------------------------
-
   function copySelected() {
     const ids = sortedResults
       .filter(r => selected[r.loc_id || r.symbol])
       .map(r => r.loc_id || r.symbol);
-
     if (ids.length === 0) return alert("No selected rows.");
     navigator.clipboard.writeText(ids.join("\n"));
     alert(`Copied ${ids.length} gene IDs.`);
@@ -237,9 +232,9 @@ export default function GeneFinder() {
     a.click();
   }
 
-  // -------------------------------------------
+  // ================================================================
   // RENDER
-  // -------------------------------------------
+  // ================================================================
 
   const th = col => ({
     padding: "6px 8px",
@@ -251,10 +246,8 @@ export default function GeneFinder() {
 
   const td = { padding: "6px 8px", borderBottom: "1px solid #eee" };
 
-  function sortIndicator(col) {
-    if (sortColumn !== col) return "";
-    return sortDirection === "asc" ? " ▲" : " ▼";
-  }
+  const sortIndicator = col =>
+    sortColumn === col ? (sortDirection === "asc" ? " ▲" : " ▼") : "";
 
   return (
     <div className="gf-container">
