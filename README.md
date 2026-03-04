@@ -1,5 +1,6 @@
+![Status](https://img.shields.io/badge/status-active-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
 # CRUNCH
-
 
 ![CRUNCH homepage](frontend/src/images/CRUNCH_helix.png)
 
